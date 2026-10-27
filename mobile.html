@@ -1,0 +1,843 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="description" content="小比的像素小屋 · XIAOBI'S LOFI ROOM — 一个像素风 lofi 治愈互动小场景。摸遍小屋的每个角落，看小比发呆、蜷窝、打盹，伴以萨蒂 / 德彪西 / 肖邦的古典钢琴。">
+<meta name="theme-color" content="#1a120c">
+<meta name="color-scheme" content="dark">
+<meta property="og:title" content="小比的像素小屋 · XIAOBI'S LOFI ROOM">
+<meta property="og:description" content="像素风 lofi 治愈互动小屋：拖动小比、开关蘑菇灯与窗户、切换昼夜，听萨蒂 / 德彪西 / 肖邦。">
+<meta property="og:type" content="website">
+<title>小比的像素小屋 · XIAOBI'S LOFI ROOM</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' fill='%231a120c'/%3E%3Cpath d='M4 5 L4 3 L6 3 L6 5 L10 5 L10 3 L12 3 L12 5 L13 5 L13 11 L3 11 L3 5 Z' fill='%23ffc06b'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+<style>
+@font-face{
+  font-family:'Zpix';
+  src:url('https://cdn.jsdelivr.net/gh/SolidZORO/zpix-pixel-font@3.2.0/website/zpix.woff2') format('woff2');
+  font-display:swap;
+}
+@font-face{
+  font-family:'Press Start 2P';
+  src:url('https://cdn.jsdelivr.net/npm/@fontsource/press-start-2p@5.0.19/files/press-start-2p-latin-400-normal.woff2') format('woff2');
+  font-display:swap;
+}
+@font-face{
+  font-family:'Silkscreen';
+  src:url('https://cdn.jsdelivr.net/npm/@fontsource/silkscreen@5.0.18/files/silkscreen-latin-400-normal.woff2') format('woff2');
+  font-display:swap;
+}
+:root{
+  --px:'Zpix','DotGothic16',monospace;
+  --en:'Press Start 2P','Silkscreen',monospace;
+  --ink:#3a2418;
+  --amber:#ffc06b;
+  --amber-d:#e8883e;
+  --sage:#a8d8b9;
+  --cream:#fff3e0;
+  --panel:#3a2620;
+  --panel-l:#6b4a38;
+  --gold:#ffd479;
+  --neon:#ff7a59;
+}
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{height:100%;overflow:hidden;background:#1a120c}
+body{
+  font-family:var(--px);
+  color:var(--cream);
+  user-select:none;
+  cursor:crosshair;
+  image-rendering:pixelated;
+}
+
+/* ============================================================
+   舞台：固定 16:9，等比缩放居中
+   ============================================================ */
+#stage{
+  position:fixed;left:50%;top:50%;
+  width:100vw;height:56.25vw;
+  max-height:100vh;max-width:177.78vh;
+  transform:translate(-50%,-50%);
+  overflow:hidden;touch-action:none;
+  box-shadow:0 0 80px rgba(0,0,0,.9);
+}
+
+/* 背景房间图 */
+#bg{
+  position:absolute;inset:0;
+  background:url('assets/room_day.png?v=2') center/cover no-repeat;
+  image-rendering:pixelated;
+  transition:opacity 2s ease;
+}
+/* 第二层背景：夜晚图交叉淡入 */
+#bg2{
+  position:absolute;inset:0;
+  background-position:center;background-size:cover;background-repeat:no-repeat;
+  image-rendering:pixelated;
+  opacity:0;transition:opacity 2s ease;
+}
+body[data-time="day"]   #bg{filter:none}
+body[data-time="night"] #bg{filter:none}
+
+/* 挂画（常驻墙面，点击在 猫蒂丝 / 花豹 / 取下 三态间循环） */
+#painting{
+  position:absolute;z-index:4;left:68%;top:13%;
+  width:14.5%;height:auto;
+  cursor:pointer;touch-action:none;user-select:none;-webkit-user-drag:none;
+  /* 原画自带的白边已抠除，这里用 CSS 投一层贴墙的柔和暗影，右下偏移更立体。
+     白天把昼夜 filter 序列补齐为恒等值（同序同数量），保证切换时连续插值而非瞬跳 */
+  filter:brightness(1) saturate(1) hue-rotate(0deg) contrast(1)
+    drop-shadow(3px 5px 5px rgba(42,26,12,.32)) drop-shadow(7px 10px 14px rgba(42,26,12,.22));
+  transition:transform .18s ease,opacity .18s ease,filter 2s ease;
+}
+/* 第三幅（埃及猫）为竖构图，略收小一点；左缘微调使其与其余两幅视觉中心一致 */
+#painting[data-idx="2"]{width:13.3%;left:68.6%;}
+#painting:hover{transform:scale(1.045)}
+#painting:active{transform:scale(.97)}
+#painting.none{display:none}
+/* 夜晚挂画（含木框）压暗偏冷，融入夜墙（白天保持原色）。画框为反光体，需比前景压得更暗才不“自发光” */
+body[data-time="night"] #painting{
+  filter:brightness(.4) saturate(.62) hue-rotate(-8deg) contrast(1.02)
+    drop-shadow(3px 5px 6px rgba(6,8,22,.5)) drop-shadow(8px 12px 18px rgba(4,6,18,.42));
+}
+/* 台灯也关掉后仅剩月光：进一步压暗、去饱和、偏冷，几乎隐入夜墙 */
+body[data-time="night"][data-lamp="off"] #painting{
+  filter:brightness(.3) saturate(.5) hue-rotate(-12deg) contrast(1.03)
+    drop-shadow(3px 5px 7px rgba(4,6,20,.55)) drop-shadow(8px 12px 20px rgba(3,5,16,.48));
+}
+/* 空墙态“挂回”热区：几何与挂画一致，平时完全透明、不可点；仅画被取下(body[data-paint=3])
+   时可交互，鼠标悬停到该位置才显形（虚线框＋“挂画”字样），点击把画挂回去 */
+#paintSlot{
+  position:absolute;z-index:4;left:68%;top:13%;width:14.5%;aspect-ratio:640/551;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5%;
+  border:2px dashed rgba(122,92,58,.5);border-radius:6px;
+  color:rgba(122,92,58,.72);background:rgba(122,92,58,.04);
+  cursor:pointer;touch-action:none;user-select:none;
+  /* 不挂画时墙面保持干净：热区仍可点，但完全透明，只有鼠标悬停到该位置才显形 */
+  opacity:0;pointer-events:none;
+  transition:opacity .18s ease,border-color .18s ease,color .18s ease,background-color .18s ease,transform .12s ease;
+}
+#paintSlot .ps-plus{font-size:clamp(15px,2.3vw,30px);line-height:1;font-weight:300;}
+#paintSlot .ps-label{font-size:clamp(8px,.95vw,13px);letter-spacing:.28em;
+  opacity:0;transform:translateY(-4px);transition:opacity .18s ease,transform .18s ease;}
+body[data-paint="3"] #paintSlot{pointer-events:auto;opacity:0;}
+body[data-paint="3"] #paintSlot:hover{opacity:1;border-color:rgba(122,92,58,.9);
+  color:rgba(98,70,40,.95);background:rgba(122,92,58,.1);}
+body[data-paint="3"] #paintSlot:hover .ps-label{opacity:1;transform:none;}
+body[data-paint="3"] #paintSlot:active{transform:scale(.97);}
+/* 夜晚：虚线框与字改为冷蓝、压暗，融进夜墙（默认同样不可见，悬停才出现） */
+body[data-time="night"] #paintSlot{border-color:rgba(150,172,214,.42);
+  color:rgba(162,182,224,.6);background:rgba(120,150,210,.05);}
+body[data-time="night"][data-paint="3"] #paintSlot:hover{border-color:rgba(178,196,232,.85);
+  color:rgba(206,220,248,.95);background:rgba(120,150,210,.12);}
+
+/* 小鸟玩具（可左键拖动） */
+#bird{
+  position:absolute;left:37%;bottom:7%;z-index:11;width:7.5%;
+  transform:translateX(-50%);
+  cursor:grab;touch-action:none;
+}
+#bird:active{cursor:grabbing}
+#bird img{
+  width:100%;height:auto;display:block;
+  image-rendering:pixelated;-webkit-user-drag:none;user-select:none;
+  /* 白天立绘：微暖中性，贴身软影；夜版立绘同尺寸叠在上方做 2s 交叉 */
+  filter:sepia(.05) saturate(1.03) brightness(1.02) hue-rotate(0deg) contrast(1)
+    drop-shadow(0 2px 2px rgba(60,40,20,.28));
+  transition:opacity 2s ease,filter 2s ease;
+}
+/* 夜版立绘：压暗 + 冷蓝 + 浅腹去白已烘焙进 PNG（边缘 alpha 与白天逐像素一致），
+   绝对定位与白天立绘重合，夜间淡入、白天淡出。浅腹羽因此也能均匀吃进夜色，
+   不再依赖对近灰浅羽冷化不足、且压不暗高亮区的单层 multiply 蒙版。 */
+#bird img.night{
+  position:absolute;left:0;top:0;width:100%;height:auto;opacity:0;
+  filter:drop-shadow(0 2px 2px rgba(12,18,42,.55));
+}
+body[data-time="night"] #bird img.day{opacity:0}
+body[data-time="night"] #bird img.night{opacity:1}
+body[data-time="night"][data-lamp="off"] #bird img.night{
+  filter:brightness(.8) drop-shadow(0 1px 2px rgba(12,18,40,.6));
+}
+#bird .shade{
+  position:absolute;left:52%;bottom:-2%;transform:translateX(-50%);
+  width:98%;height:22%;min-height:4px;border-radius:50%;
+  background:radial-gradient(ellipse at center,
+    rgba(58,38,20,.40) 0%,rgba(58,38,20,.24) 42%,rgba(58,38,20,.10) 66%,rgba(58,38,20,0) 82%);
+  filter:blur(2.4px);pointer-events:none;
+  transition:background 2s ease;
+}
+body[data-time="night"] #bird .shade{
+  background:radial-gradient(ellipse at center,
+    rgba(10,15,38,.62) 0%,rgba(12,17,40,.4) 42%,rgba(10,14,32,.14) 66%,rgba(10,14,32,0) 82%);
+}
+/* 双击小鸟的一次性“摇晃”动画层。摇晃极端姿态比静态立绘更宽（头/尾伸展），
+   动画画幅(508×270)宽于静态盒(比1.69)，故按【等高 + 脚锚点】与静态 img 对齐：
+   height 撑满盒、width 按自身宽高比自适应并略向左右伸出透明区（不裁头/尾、不变形），
+   left 偏移让画幅内的脚与静态立绘的脚（frac .7332）重合。昼夜 filter 与 img 同序同值。 */
+#birdAnim{
+  position:absolute;left:-3.05%;top:0;height:100%;width:auto;
+  image-rendering:pixelated;pointer-events:none;opacity:0;z-index:2;
+  filter:sepia(.05) saturate(1.03) brightness(1.02) hue-rotate(0deg) contrast(1)
+    drop-shadow(0 2px 2px rgba(60,40,20,.28));
+  transition:opacity .3s ease,filter 2s ease;
+}
+#bird.shake img{opacity:0}
+/* 夜晚摇晃绘制的是烘焙好的夜版序列帧（压暗/冷化已进 PNG），这里只留软影、不二次压暗，
+   否则浅腹会过亮或与静态夜鸟色差；关灯时再统一收 .8，与静态夜版图一致 */
+body[data-time="night"] #birdAnim{
+  filter:drop-shadow(0 2px 2px rgba(12,18,42,.55));
+}
+body[data-time="night"][data-lamp="off"] #birdAnim{
+  filter:brightness(.8) drop-shadow(0 1px 2px rgba(12,18,40,.6));
+}
+
+/* 关灯：只收回台灯那一块光（右墙光晕 + 地面光池），窗光照亮的左/中部不动，
+   因而不会有盖整块黑布的感觉。昼夜强度不同：夜里冷墨重压，白天仅轻轻收走暖光池。 */
+#dim{
+  position:absolute;inset:0;z-index:8;pointer-events:none;
+  mix-blend-mode:multiply;
+  opacity:0;transition:opacity 2s cubic-bezier(.4,0,.2,1);
+}
+body[data-time="night"] #dim{
+  background:radial-gradient(ellipse 47% 74% at 88% 50%,
+    rgba(7,10,26,.82) 0%,
+    rgba(9,12,29,.60) 38%,
+    rgba(12,15,33,.30) 66%,
+    rgba(12,15,33,0) 100%);
+}
+body[data-time="day"] #dim{
+  background:radial-gradient(ellipse 42% 62% at 89% 52%,
+    rgba(86,62,32,.32) 0%,
+    rgba(86,62,32,.15) 55%,
+    rgba(86,62,32,0) 100%);
+  transition-duration:2s;
+}
+body[data-lamp="off"] #dim{opacity:1}
+
+/* 蘑菇灯熄灭：仅夜间叠加灯罩暗层（白天窗光强、灯罩本就深色，叠加会在浅色墙上留假暗晕，
+   故白天只靠 #dim 轻柔收走角落暖光，不压灯罩）。 */
+#lampOff{
+  position:absolute;left:86%;top:40%;width:11%;height:13%;z-index:3;
+  pointer-events:none;opacity:0;transition:opacity 2s cubic-bezier(.4,0,.2,1);
+  background:radial-gradient(ellipse at 50% 60%,
+    rgba(20,16,30,.88) 0%,
+    rgba(30,24,42,.55) 55%,
+    transparent 100%);
+  border-radius:50% 50% 45% 45%;
+}
+body[data-time="night"][data-lamp="off"] #lampOff{opacity:1}
+
+/* 额外暖灯光雾呼吸：只在夜间叠加；白天灯光已烘焙进房间图，不再叠加以免过曝 */
+#lampGlow{
+  position:absolute;left:62%;top:-8%;width:44%;height:62%;z-index:2;
+  background:radial-gradient(ellipse at 72% 30%,rgba(255,190,105,.34),transparent 66%);
+  pointer-events:none;animation:lampBreathe 6.5s ease-in-out infinite;
+  transition:opacity 2s cubic-bezier(.4,0,.2,1);
+}
+body[data-time="day"] #lampGlow{opacity:0;animation:none}
+@keyframes lampBreathe{0%,100%{opacity:.55}50%{opacity:1}}
+body[data-lamp="off"] #lampGlow{opacity:0;animation:none}
+
+/* 夜晚开灯时，小比身上的暖光投影（叠加在猫上层，仅夜晚+灯亮时） */
+#catNightLight{
+  position:absolute;inset:0;z-index:6;pointer-events:none;opacity:0;
+  mix-blend-mode:screen;
+  background:radial-gradient(ellipse 55% 50% at 88% 58%,
+    rgba(255,178,92,.42) 0%,
+    rgba(255,150,70,.14) 38%,
+    transparent 72%);
+  transition:opacity 2s cubic-bezier(.4,0,.2,1);
+}
+body[data-time="night"][data-lamp="on"] #catNightLight{opacity:1}
+
+/* 百叶窗投在墙上的光带 */
+#tint{position:absolute;inset:0;z-index:7;pointer-events:none;mix-blend-mode:soft-light;transition:background 2s ease,opacity 2s ease;opacity:.5}
+body[data-time="day"]   #tint{background:linear-gradient(200deg,#ffe9c4 0%,transparent 48%,#c8a878 100%);opacity:.35}
+body[data-time="night"] #tint{background:linear-gradient(200deg,#4a4a8a 0%,transparent 50%,#1a1030 100%);opacity:.75}
+
+/* ============================================================
+   角色小比（立绘叠加，按槽位移动）
+   ============================================================ */
+#cat{
+  position:absolute;z-index:5;
+  transform:translateX(-50%);
+  pointer-events:none;
+  /* 白天：中性自然色（函数序列与夜晚完全一致，多余项用恒等值，保证 2s 连续插值） */
+  filter:sepia(.04) saturate(1.04) brightness(1.01) hue-rotate(0deg) contrast(1);
+  transition:filter 2s ease;
+}
+/* 夜晚：压暗 + 冷色，融入窗外蓝光（#tint 会再叠一层环境蓝） */
+body[data-time="night"] #cat{
+  filter:sepia(0) saturate(.92) brightness(.86) hue-rotate(4deg) contrast(1.02);
+}
+body[data-time="night"][data-lamp="off"] #cat{
+  filter:sepia(0) saturate(.88) brightness(.8) hue-rotate(10deg) contrast(1.04);
+}
+#cat .inner{
+  position:absolute;left:0;bottom:0;transform:translateX(-50%);
+  height:100%;width:100%;display:flex;align-items:flex-end;justify-content:center;
+}
+#cat img, #cat canvas{
+  height:100%;width:auto;max-width:none;
+  image-rendering:pixelated;
+  filter:drop-shadow(2px 4px 3px rgba(40,24,12,.30)) drop-shadow(0 2px 6px rgba(30,18,8,.18));
+  position:absolute;left:50%;bottom:0;transform:translateX(-50%);
+  opacity:0;
+  transition:filter 2s ease;   /* 只过渡昼夜投影；opacity 保持硬切，换动作不闪 */
+}
+#cat img.show, #cat canvas.show{opacity:1}
+/* 夜晚：投影偏冷蓝，融入夜间环境光 */
+body[data-time="night"] #cat img.show,
+body[data-time="night"] #cat canvas.show{
+  filter:drop-shadow(2px 4px 3px rgba(20,24,48,.45)) drop-shadow(0 2px 6px rgba(16,18,36,.28));
+}
+#cat .inner.hop img.show, #cat .inner.hop canvas.show{animation:catHop .5s steps(5) 1}
+#cat.sleep img.show{animation:catBreathe 4.6s ease-in-out infinite}
+@keyframes catIdle{0%,100%{transform:translateX(-50%) translateY(0)}50%{transform:translateX(-50%) translateY(-1.2%)}}
+@keyframes catBreathe{0%,100%{transform:translateX(-50%) scaleY(1)}50%{transform:translateX(-50%) scaleY(1.015) translateY(0.4%)}}
+@keyframes catHop{0%{transform:translateX(-50%) translateY(0)}45%{transform:translateX(-50%) translateY(-26%)}100%{transform:translateX(-50%) translateY(0)}}
+/* 脚下接触阴影（暖色软影，与室内地板/沙发阴影一致）。
+   宽度由 JS 按猫实际渲染宽度以 px 设定（#cat 自身宽度塌陷为 0，不能用 %） */
+#cat .shade{
+  position:absolute;left:50%;bottom:-1%;transform:translateX(-50%);
+  height:7%;min-height:10px;border-radius:50%;
+  background:radial-gradient(ellipse at center,
+    rgba(46,26,12,.46) 0%,rgba(46,26,12,.28) 38%,rgba(46,26,12,.10) 64%,rgba(46,26,12,0) 80%);
+  filter:blur(3px);
+  transition:width .5s ease,opacity .5s ease,background 2s ease;
+  opacity:.95;pointer-events:none;
+}
+/* 夜晚阴影更冷更深 */
+body[data-time="night"] #cat .shade{
+  background:radial-gradient(ellipse at center,
+    rgba(12,16,36,.58) 0%,rgba(12,16,34,.34) 40%,rgba(10,12,26,.12) 66%,rgba(10,12,26,0) 82%);
+}
+
+/* ============================================================
+   互动热区
+   ============================================================ */
+.hot{
+  position:absolute;cursor:pointer;z-index:8;
+  border:none;outline:none;background:transparent;
+  transition:transform .25s cubic-bezier(.34,1.56,.64,1),filter .22s ease;
+}
+.hot:hover{
+  /* 不变亮，改为轻微抬升 + 手型光标 */
+  transform:translateY(-2px) scale(1.015);
+  cursor:grab;
+  filter:drop-shadow(0 4px 3px rgba(0,0,0,.25));
+}
+.hot:active{cursor:grabbing}
+/* 分层：小目标不被大区域吞掉 */
+#h-cat{z-index:10}
+#h-bowl,#h-lamp{z-index:9}
+
+/* 热区标签（小鸟也复用同款：悬停浮现“点击移动”） */
+.hot .tag, #bird .tag{
+  position:absolute;left:50%;top:-4px;transform:translate(-50%,-100%) scale(.85);
+  background:var(--panel);border:2px solid var(--amber);
+  padding:3px 8px;font-size:clamp(7px,.72vw,13px);white-space:nowrap;
+  color:var(--cream);opacity:0;pointer-events:none;
+  transition:opacity .18s,transform .18s;
+  box-shadow:3px 3px 0 rgba(0,0,0,.55);
+  z-index:5;
+}
+.hot:hover .tag, #bird:hover .tag{opacity:1;transform:translate(-50%,-100%) scale(1)}
+/* 小比：标签放进 #cat 跟随真实立绘头顶（#cat 宽塌陷，left:50% 即锚点中心），
+   是否显示由热区 #h-cat 的 hover 经 JS 切 .hint-show 控制（事件/收集/双击逻辑不变） */
+#cat .tag{
+  position:absolute;left:50%;top:0;z-index:6;
+  transform:translate(-50%,-118%) scale(.85);
+  background:var(--panel);border:2px solid var(--amber);
+  padding:3px 8px;font-size:clamp(7px,.72vw,13px);white-space:nowrap;
+  color:var(--cream);opacity:0;pointer-events:none;
+  transition:opacity .18s,transform .18s;
+  box-shadow:3px 3px 0 rgba(0,0,0,.55);
+}
+#cat.hint-show .tag{opacity:1;transform:translate(-50%,-118%) scale(1)}
+/* 睡觉立绘上方约 17% 是留白，标签下压到蜷睡实体的背上沿 */
+#cat.sleep .tag{top:15%;transform:translate(-50%,-100%) scale(.85)}
+#cat.sleep.hint-show .tag{transform:translate(-50%,-100%) scale(1)}
+/* 蘑菇灯：hover 文案随灯态切换（亮着提示关闭，灭了提示打开） */
+body[data-lamp="on"]  #h-lamp .t-off{display:none}
+body[data-lamp="off"] #h-lamp .t-on{display:none}
+body[data-window="closed"] #h-window .w-open{display:none}
+body[data-window="open"]   #h-window .w-closed{display:none}
+/* 窗户热区贴在舞台最顶：默认向上浮现的标签会被顶出视口，改放到热区下沿内侧 */
+#h-window .tag{top:auto;bottom:6px;transform:translate(-50%,0) scale(.85)}
+#h-window:hover .tag{opacity:1;transform:translate(-50%,0) scale(1)}
+/* 未发现热区的脉冲光点：四角星 ✨（横竖两根梭形光芒叠加，仅用 border-radius/transform，兼容内嵌浏览器） */
+.hot .ping{
+  position:absolute;left:50%;top:50%;width:18px;height:18px;
+  transform:translate(-50%,-50%);
+  filter:drop-shadow(0 0 4px rgba(255,212,121,.95)) drop-shadow(0 0 1.5px rgba(255,255,255,.85));
+  animation:pingPulse 1.9s ease-in-out infinite;
+}
+.hot .ping::before,.hot .ping::after{
+  content:"";position:absolute;border-radius:50%;
+  background:linear-gradient(var(--dir,to bottom),
+    rgba(255,232,170,0) 0%,var(--gold) 30%,#fff8e6 50%,var(--gold) 70%,rgba(255,232,170,0) 100%);
+}
+.hot .ping::before{            /* 竖向光芒 */
+  left:50%;top:0;width:26%;height:100%;transform:translateX(-50%);
+}
+.hot .ping::after{             /* 横向光芒 */
+  --dir:to right;
+  left:0;top:50%;width:100%;height:26%;transform:translateY(-50%);
+}
+@keyframes pingPulse{
+  0%,100%{transform:translate(-50%,-50%) scale(.62) rotate(0deg);opacity:.5}
+  50%{transform:translate(-50%,-50%) scale(1.18) rotate(45deg);opacity:1}
+}
+.hot.done .ping{display:none}
+body.hidehints .hot .ping{display:none}
+
+/* ============================================================
+   像素对话框
+   ============================================================ */
+#dlg{
+  position:absolute;left:50%;bottom:3%;transform:translate(-50%,140%);
+  width:min(30%,340px);
+  background:var(--panel);
+  border:2px solid var(--cream);
+  box-shadow:0 0 0 2px var(--panel),4px 4px 0 rgba(0,0,0,.55);
+  padding:7px 12px 9px;z-index:14;pointer-events:none;
+  opacity:0;visibility:hidden;
+  transition:transform .32s cubic-bezier(.34,1.5,.64,1),opacity .28s ease,visibility .28s;
+}
+#dlg.show{transform:translate(-50%,0);opacity:1;visibility:visible}
+#dlg .who{
+  position:absolute;left:12px;top:-10px;
+  background:var(--amber-d);border:2px solid var(--cream);
+  padding:0 8px;font-size:clamp(7px,.72vw,11px);
+  color:#fff;box-shadow:2px 2px 0 rgba(0,0,0,.5);
+}
+#dlgText{
+  font-size:clamp(9px,.8vw,13px);line-height:1.55;
+  min-height:1.5em;letter-spacing:.3px;
+}
+#dlg .next{
+  position:absolute;right:9px;bottom:4px;
+  font-family:var(--en);font-size:8px;color:var(--gold);
+  animation:blinkNext 1s steps(1) infinite;opacity:0;
+}
+#dlg.done .next{opacity:1}
+@keyframes blinkNext{0%,100%{opacity:1}50%{opacity:.15}}
+#dlg .corner{position:absolute;width:5px;height:5px;background:var(--amber)}
+#dlg .c1{left:-3px;top:-3px}#dlg .c2{right:-3px;top:-3px}
+#dlg .c3{left:-3px;bottom:-3px}#dlg .c4{right:-3px;bottom:-3px}
+
+/* ============================================================
+   HUD
+   ============================================================ */
+#hud{
+  position:absolute;left:2%;top:3.4%;z-index:15;
+  display:flex;flex-direction:column;gap:8px;
+}
+/* 左上角只保留时钟 + 当前状态徽章；治愈值/物件/日常面板隐藏，计分与收集逻辑照常后台运行 */
+#hud .pxpanel{display:none}
+#hud #stateBadge{display:flex}
+.pxpanel{
+  background:rgba(58,38,32,.9);
+  border:3px solid var(--cream);
+  box-shadow:5px 5px 0 rgba(0,0,0,.55);
+  padding:8px 14px;
+  display:flex;align-items:center;gap:10px;
+}
+/* 像素肉垫心（box-shadow 点阵） */
+.pxheart{
+  width:3px;height:3px;background:transparent;margin:5px 10px 7px 7px;
+  transform:scale(1.1);
+  box-shadow:
+    3px 0 var(--neon),6px 0 var(--neon),15px 0 var(--neon),18px 0 var(--neon),
+    0 3px var(--neon),3px 3px #ffb08f,6px 3px #ffb08f,9px 3px var(--neon),12px 3px var(--neon),15px 3px #ffb08f,18px 3px #ffb08f,21px 3px var(--neon),
+    0 6px #ffb08f,3px 6px #ffd9c2,6px 6px #ffb08f,9px 6px #ffb08f,12px 6px #ffb08f,15px 6px #ffb08f,18px 6px #ffb08f,21px 6px #ffb08f,
+    3px 9px var(--neon),6px 9px #ffb08f,9px 9px #ffb08f,12px 9px #ffb08f,15px 9px #ffb08f,18px 9px var(--neon),
+    6px 12px var(--neon),9px 12px #ffb08f,12px 12px #ffb08f,15px 12px var(--neon),
+    9px 15px var(--neon),12px 15px var(--neon);
+  animation:heartBeat 1.5s ease-in-out infinite;
+}
+@keyframes heartBeat{0%,100%{transform:scale(1.1)}12%{transform:scale(1.32)}24%{transform:scale(1.1)}}
+#hud .lb{font-size:clamp(8px,.85vw,14px);color:#d8b49a;letter-spacing:1px}
+#score{
+  font-family:var(--en);font-size:clamp(11px,1.15vw,19px);
+  color:var(--amber);min-width:2.4em;text-align:right;
+  text-shadow:0 0 8px rgba(255,192,107,.7);transition:transform .2s
+}
+#score.pop{transform:scale(1.4)}
+#hud .plb{font-size:clamp(7px,.74vw,12px);color:#d8b49a;letter-spacing:1px}
+#progTxt{font-family:var(--en);font-size:clamp(7px,.75vw,12px);color:var(--amber)}
+#stTxt{font-family:var(--en);font-size:clamp(7px,.75vw,12px);color:var(--sage)}
+.bar{
+  width:clamp(72px,9vw,150px);height:12px;
+  background:#24150f;border:2px solid var(--panel-l);
+  position:relative;overflow:hidden;
+}
+#progFill{
+  height:100%;width:0%;
+  background:repeating-linear-gradient(90deg,var(--amber) 0 6px,#d99a52 6 12px);
+  transition:width .5s steps(8);
+  box-shadow:0 0 10px rgba(255,192,107,.6);
+}
+#stFill{
+  height:100%;width:25%;
+  background:repeating-linear-gradient(90deg,var(--sage) 0 6px,#7fb891 6 12px);
+  transition:width .5s steps(8);
+  box-shadow:0 0 10px rgba(168,216,185,.6);
+}
+/* 当前状态徽章（左上角、时钟下方；不拦截点击） */
+#stateBadge{
+  align-self:flex-start;
+  border-color:var(--gold);
+  color:var(--gold);letter-spacing:2px;
+  font-size:clamp(9px,.95vw,15px);
+  padding:6px 14px;
+  box-shadow:4px 4px 0 rgba(0,0,0,.55);
+  white-space:nowrap;
+  transition:transform .25s,box-shadow .25s;
+}
+#stateBadge.flash{
+  animation:badgeFlash .6s steps(3);
+}
+@keyframes badgeFlash{
+  0%{transform:scale(1);box-shadow:5px 5px 0 rgba(0,0,0,.55)}
+  40%{transform:scale(1.14);box-shadow:5px 5px 0 rgba(0,0,0,.55),0 0 26px rgba(255,212,121,.95)}
+  100%{transform:scale(1);box-shadow:5px 5px 0 rgba(0,0,0,.55)}
+}
+#stateBadge .si{
+  color:var(--gold);display:inline-block;
+  animation:spinIcon 2.6s steps(4) infinite;
+}
+@keyframes spinIcon{0%,100%{transform:rotate(0)}50%{transform:rotate(180deg)}}
+
+/* 右上角“？”方块：复用 .cbtn 方块外观，点击在其下方展开互动提示下拉 */
+#ctrlHint{position:relative;align-self:center}
+#ctrlHint summary{
+  list-style:none;cursor:pointer;user-select:none;
+  font-family:var(--px);font-weight:700;
+}
+#ctrlHint summary::-webkit-details-marker{display:none}
+#ctrlHint:not([open]) .ch-body{display:none}
+#ctrlHint .ch-body{
+  position:absolute;top:calc(100% + 8px);right:0;z-index:30;
+  background:rgba(58,38,32,.96);
+  border:2px solid var(--panel-l);
+  box-shadow:4px 4px 0 rgba(0,0,0,.5);
+  padding:8px 13px 9px;
+  color:#e7d5c0;
+  font-size:clamp(8px,.82vw,13px);
+  letter-spacing:1px;line-height:1.95;white-space:nowrap;
+}
+#ctrlHint .ck{color:var(--gold);margin-right:5px}
+
+/* ============================================================
+   控制按钮（右上角）
+   ============================================================ */
+#ctrls{position:absolute;right:2%;top:3.4%;z-index:15;display:flex;gap:8px}
+.cbtn{
+  width:clamp(34px,3.3vw,54px);aspect-ratio:1;
+  background:rgba(58,38,32,.92);
+  border:3px solid var(--cream);
+  box-shadow:4px 4px 0 rgba(0,0,0,.55);
+  color:var(--cream);font-family:var(--px);
+  font-size:clamp(11px,1.2vw,20px);
+  cursor:pointer;position:relative;
+  display:flex;align-items:center;justify-content:center;
+  transition:transform .12s,border-color .18s,background .18s;
+}
+.cbtn:hover{transform:translate(-2px,-2px);box-shadow:6px 6px 0 rgba(0,0,0,.55);border-color:var(--amber)}
+.cbtn:active{transform:translate(2px,2px);box-shadow:2px 2px 0 rgba(0,0,0,.55)}
+.cbtn.off{opacity:.42;filter:grayscale(.85)}
+.cbtn .tip{
+  position:absolute;top:112%;right:0;
+  background:var(--panel);border:2px solid var(--amber);
+  padding:2px 7px;font-size:clamp(7px,.7vw,12px);white-space:nowrap;
+  opacity:0;pointer-events:none;transition:opacity .18s;
+  box-shadow:3px 3px 0 rgba(0,0,0,.5);
+}
+.cbtn:hover .tip{opacity:1}
+#clockBox{
+  align-self:flex-start;
+  background:rgba(58,38,32,.9);border:3px solid var(--amber);
+  box-shadow:4px 4px 0 rgba(0,0,0,.55);
+  padding:5px 12px;pointer-events:none;
+  font-family:var(--en);font-size:clamp(8px,.9vw,15px);
+  color:var(--gold);letter-spacing:1px;white-space:nowrap;
+  text-shadow:0 0 6px rgba(255,212,121,.7);
+  animation:clockPulse 2s steps(1) infinite;
+}
+@keyframes clockPulse{0%,100%{opacity:1}50%{opacity:.85}}
+#nowPlaying{
+  position:absolute;right:2%;top:calc(3.4% + clamp(40px,3.9vw,62px));z-index:15;
+  background:rgba(58,38,32,.9);border:2px solid var(--gold);
+  box-shadow:4px 4px 0 rgba(0,0,0,.55);
+  padding:3px 7px;font-size:clamp(7px,.68vw,11px);
+  color:var(--gold);letter-spacing:0;white-space:nowrap;
+  opacity:0;transform:translateX(12px);transition:all .35s;
+}
+#nowPlaying.show{opacity:1;transform:translateX(0)}
+#nowPlaying .bars{display:inline-flex;gap:2px;margin-right:6px;vertical-align:-1px}
+#nowPlaying .bars i{width:3px;height:9px;background:var(--gold);animation:eq .9s ease-in-out infinite}
+#nowPlaying .bars i:nth-child(2){animation-delay:-.3s}
+#nowPlaying .bars i:nth-child(3){animation-delay:-.6s}
+@keyframes eq{0%,100%{height:3px}50%{height:10px}}
+
+/* ============================================================
+   标题
+   ============================================================ */
+#title{
+  position:absolute;left:50%;top:3.2%;transform:translateX(-50%);
+  z-index:13;text-align:center;pointer-events:none;
+}
+#title h1{
+  font-size:clamp(12px,1.5vw,25px);letter-spacing:6px;font-weight:400;
+  color:var(--cream);
+  text-shadow:3px 3px 0 var(--amber-d),6px 6px 0 rgba(0,0,0,.5);
+}
+#title p{
+  font-family:var(--en);font-size:clamp(6px,.66vw,11px);
+  color:var(--amber);letter-spacing:3px;margin-top:7px;
+  text-shadow:2px 2px 0 rgba(0,0,0,.6);
+}
+
+/* ============================================================
+   CRT 效果层
+   ============================================================ */
+#scan{
+  position:absolute;inset:0;z-index:11;pointer-events:none;
+  background:repeating-linear-gradient(180deg,rgba(0,0,0,.14) 0 1px,transparent 1px 3px);
+  opacity:.5;mix-blend-mode:multiply;
+}
+#vig{
+  position:absolute;inset:0;z-index:11;pointer-events:none;
+  background:radial-gradient(ellipse at center,transparent 52%,rgba(26,14,8,.55) 100%);
+}
+#grain{
+  position:absolute;inset:-50%;z-index:12;pointer-events:none;opacity:.05;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3'/%3E%3C/filter%3E%3Crect width='120' height='120' filter='url(%23n)'/%3E%3C/svg%3E");
+  animation:grainMove .6s steps(3) infinite;
+}
+@keyframes grainMove{0%{transform:translate(0,0)}33%{transform:translate(-4%,3%)}66%{transform:translate(3%,-4%)}}
+#fx{position:absolute;inset:0;z-index:10;pointer-events:none}
+
+/* ============================================================
+   飘字 / 爱心
+   ============================================================ */
+.plus{
+  position:absolute;z-index:20;pointer-events:none;
+  font-family:var(--en);font-size:clamp(8px,.9vw,15px);color:var(--amber);
+  text-shadow:2px 2px 0 rgba(0,0,0,.75),0 0 10px rgba(255,192,107,.8);
+  animation:plusUp 1.05s steps(6) forwards;
+}
+@keyframes plusUp{
+  0%{transform:translateY(0);opacity:0}
+  20%{opacity:1;transform:translateY(-10px)}
+  100%{transform:translateY(-52px);opacity:0}
+}
+.fh{
+  position:absolute;z-index:20;pointer-events:none;font-size:clamp(11px,1.2vw,20px);
+  animation:fhUp 1.5s steps(8) forwards;filter:drop-shadow(0 0 5px rgba(255,150,90,.9))
+}
+@keyframes fhUp{
+  0%{transform:translateY(0) scale(.4);opacity:0}
+  20%{opacity:1;transform:translateY(-14px) scale(1)}
+  100%{transform:translateY(-88px) scale(.85);opacity:0}
+}
+
+/* ============================================================
+   成就横幅
+   ============================================================ */
+#banner{
+  position:absolute;left:50%;top:42%;transform:translate(-50%,-50%) scale(0);
+  z-index:22;text-align:center;
+  background:var(--panel);border:4px solid var(--gold);
+  box-shadow:0 0 0 4px var(--panel),10px 10px 0 rgba(0,0,0,.6),0 0 50px rgba(255,212,121,.5);
+  padding:26px 44px;transition:transform .5s cubic-bezier(.34,1.5,.64,1);
+  pointer-events:none;
+}
+#banner.show{transform:translate(-50%,-50%) scale(1)}
+#banner .bt{font-family:var(--en);font-size:clamp(9px,1vw,16px);color:var(--gold);letter-spacing:2px;margin-bottom:12px}
+#banner .bm{font-size:clamp(12px,1.3vw,21px);color:var(--cream);line-height:1.8;letter-spacing:2px}
+
+/* ============================================================
+   开场
+   ============================================================ */
+#intro{
+  position:fixed;inset:0;z-index:99;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:22px;
+  background:#1a120c;cursor:pointer;
+  transition:opacity .9s,visibility .9s;
+}
+#intro.hide{opacity:0;visibility:hidden}
+#intro::before{
+  content:'';position:absolute;inset:0;
+  background:url('assets/room.png') center/cover no-repeat;
+  filter:blur(6px) brightness(.42) saturate(1.05);image-rendering:pixelated;
+}
+#intro .card{
+  position:relative;text-align:center;
+  background:rgba(58,38,32,.96);
+  border:4px solid var(--cream);
+  box-shadow:0 0 0 4px var(--panel),12px 12px 0 rgba(0,0,0,.7);
+  padding:clamp(24px,3.4vw,52px) clamp(28px,4.4vw,74px);
+  animation:cardIn .8s steps(6);
+}
+@keyframes cardIn{from{transform:translateY(26px);opacity:0}}
+#intro h1{
+  font-size:clamp(19px,2.7vw,42px);letter-spacing:8px;color:var(--cream);font-weight:400;
+  text-shadow:4px 4px 0 var(--amber-d),8px 8px 0 rgba(0,0,0,.55);
+}
+#intro .sub{
+  font-family:var(--en);font-size:clamp(7px,.82vw,13px);color:var(--amber);
+  letter-spacing:4px;margin:14px 0 22px;
+}
+#intro .desc{
+  font-size:clamp(11px,1.14vw,18px);color:#ecd2ba;line-height:2.1;letter-spacing:1px;
+  margin-bottom:26px;
+}
+#intro .go{
+  display:inline-block;font-size:clamp(12px,1.3vw,21px);letter-spacing:4px;color:#fff;
+  background:var(--amber-d);border:3px solid var(--cream);
+  padding:11px 40px;box-shadow:6px 6px 0 rgba(0,0,0,.6);
+  animation:goBlink 1.4s steps(1) infinite;
+}
+@keyframes goBlink{0%,100%{background:var(--amber-d)}50%{background:var(--amber)}}
+#intro .card .deco{position:absolute;width:8px;height:8px;background:var(--amber)}
+#intro .card .d1{left:-6px;top:-6px}#intro .card .d2{right:-6px;top:-6px}
+#intro .card .d3{left:-6px;bottom:-6px}#intro .card .d4{right:-6px;bottom:-6px}
+
+/* ============================================================
+   窄屏
+   ============================================================ */
+@media (max-aspect-ratio:1/1){
+  #title h1{letter-spacing:2px}
+  #dlg{width:72%;padding:7px 11px 9px}
+  #hud .lb{display:none}
+  #nowPlaying{font-size:8px;padding:4px 8px}
+  #ctrlHint .ch-body{font-size:8px;line-height:1.7;padding:6px 9px 7px;right:0}
+  .hot .tag, #bird .tag, #cat .tag{font-size:8px;padding:2px 5px}
+}
+</style>
+<link rel="stylesheet" href="mobile.css?v=1">
+</head>
+<body data-time="day" data-lamp="on" data-window="closed">
+
+<div id="stage">
+  <div id="bg"></div>
+  <div id="bg2"></div>
+  <!-- 挂画：点击在 猫蒂丝 / 花豹 / 空墙 三态间循环 -->
+  <img id="painting" src="assets/painting_cat.png?v=1" alt="挂画" draggable="false">
+  <!-- 空墙态的“挂回”热区：仅画被取下时出现，点这里把画挂回去 -->
+  <div id="paintSlot" aria-label="挂画"><span class="ps-plus">＋</span><span class="ps-label">挂 画</span></div>
+  <!-- 小鸟玩具（左键可拖动） -->
+  <div id="bird"><span class="shade"></span><img class="day" src="assets/bird.png?v=1" alt="小鸟玩具" draggable="false"><img class="night" src="assets/bird_night.png?v=2" alt="" draggable="false"><canvas id="birdAnim" width="508" height="270"></canvas><span class="tag">点击移动</span></div>
+  <div id="lampGlow"></div>
+  <div id="lampOff"></div>
+
+  <!-- 角色小比（立绘 / 动态视频） -->
+  <div id="cat" class="sit">
+    <div class="shade" style="width:62%"></div>
+    <div class="inner">
+      <video id="catVideo" muted loop playsinline preload="auto" style="position:absolute;width:1px;height:1px;opacity:0;pointer-events:none"></video>
+      <canvas id="catCanvas"></canvas>
+      <img id="catImg" src="assets/sit.png" alt="小比">
+    </div>
+    <span class="tag">点击移动</span>
+  </div>
+
+  <div id="dim"></div>
+  <div id="catNightLight"></div>
+  <div id="tint"></div>
+
+  <!-- 互动热区（坐标基于房间图 1536×864） -->
+  <div class="hot" id="h-cat"><span class="ping"></span></div>
+  <div class="hot" id="h-bed"   style="left:30.5%;top:42%;width:45%;height:40%"><span class="ping"></span></div>
+  <div class="hot" id="h-bowl"  style="left:2.5%;top:63%;width:15%;height:24%"><span class="ping"></span></div>
+  <div class="hot" id="h-bag"   style="left:5%;top:31%;width:27%;height:37%"><span class="ping"></span></div>
+  <div class="hot" id="h-window" style="left:11%;top:0;width:46%;height:30%"><span class="tag"><span class="w-closed">双击开窗</span><span class="w-open">双击关窗</span></span><span class="ping"></span></div>
+  <div class="hot" id="h-rug"   style="left:24%;top:80%;width:50%;height:18%"><span class="ping"></span></div>
+  <div class="hot" id="h-lamp"  style="left:85%;top:41%;width:14%;height:28%"><span class="tag"><span class="t-on">双击关灯</span><span class="t-off">双击开灯</span></span><span class="ping"></span></div>
+
+  <canvas id="fx"></canvas>
+  <div id="scan"></div>
+  <div id="vig"></div>
+  <div id="grain"></div>
+
+  <div id="title">
+    <h1>小比的像素小屋</h1>
+    <p>XIAOBI'S LOFI ROOM</p>
+  </div>
+
+  <div id="hud">
+    <div class="pxpanel">
+      <span class="pxheart"></span>
+      <span class="lb">治愈值</span>
+      <span id="score">0</span>
+    </div>
+    <div class="pxpanel">
+      <span class="plb">物件</span>
+      <span id="progTxt">0/7</span>
+      <span class="bar"><span id="progFill"></span></span>
+    </div>
+    <div class="pxpanel">
+      <span class="plb">日常</span>
+      <span id="stTxt">1/4</span>
+      <span class="bar"><span id="stFill"></span></span>
+    </div>
+    <div id="clockBox">PM 06:26</div>
+    <div class="pxpanel" id="stateBadge">
+      <span class="si">◈</span><span id="stateName">发呆中</span>
+    </div>
+  </div>
+
+  <div id="ctrls">
+    <button class="cbtn" id="btnMusicToggle"><span id="musicGlyph">🔇</span><span class="tip">音乐 开 / 关</span></button>
+    <button class="cbtn off" id="btnMusic">♪<span class="tip">点击切换曲目</span></button>
+    <button class="cbtn" id="btnTime">☀<span class="tip">切换时段</span></button>
+    <details id="ctrlHint">
+      <summary class="cbtn" id="btnHelp">?</summary>
+      <div class="ch-body">
+        <div><span class="ck">▸</span>拖动鼠标，挪动位置</div>
+        <div><span class="ck">▸</span>双击小比，改变动作</div>
+        <div><span class="ck">▸</span>双击蘑菇灯，改变亮度</div>
+        <div><span class="ck">▸</span>双击窗户，开关窗换换空气</div>
+      </div>
+    </details>
+  </div>
+  <div id="nowPlaying"><span class="bars"><i></i><i></i><i></i></span><span id="npName">—</span></div>
+
+  <div id="dlg">
+    <span class="corner c1"></span><span class="corner c2"></span>
+    <span class="corner c3"></span><span class="corner c4"></span>
+    <span class="who" id="dlgWho">小比</span>
+    <div id="dlgText"></div>
+    <span class="next">▼</span>
+  </div>
+
+  <div id="banner">
+    <div class="bt" id="bannerT">★ ALL FOUND ★</div>
+    <div class="bm" id="bannerM"></div>
+  </div>
+</div>
+
+<div id="intro">
+  <div class="card">
+    <span class="deco d1"></span><span class="deco d2"></span>
+    <span class="deco d3"></span><span class="deco d4"></span>
+    <h1>小比的像素小屋</h1>
+    <div class="sub">XIAOBI'S LOFI ROOM</div>
+    <div class="desc">
+      窗外是百叶窗切成一条一条的暖光，屋里蘑菇灯亮着。<br>
+      小比蹲在地毯上等你 ——<br>
+      摸遍小屋的每个角落，看它换着做<br>
+      发呆、蜷窝、打盹……
+    </div>
+    <div class="go">推 门 进 屋</div>
+  </div>
+</div>
+
+<script src="game.js?v=105"></script>
+<script src="mobile.js?v=1"></script>
+</body>
+</html>

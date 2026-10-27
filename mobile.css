@@ -1,0 +1,130 @@
+/* ============================================================
+   手机竖屏版（仅 mobile.html 引用）
+   桌面版是固定 16:9 的舞台；竖屏下房间保持原比例成为一条横带，
+   上下留白用同一张房间图做模糊铺底，HUD / 按钮 / 对话框移到下控制区。
+   ============================================================ */
+
+html,body{
+  height:100%;
+  overflow:hidden;
+  overscroll-behavior:none;
+}
+body{
+  cursor:auto;
+  -webkit-touch-callout:none;
+  touch-action:manipulation;
+}
+
+/* 竖屏背景：整屏铺模糊房间图，再叠一层上下压暗，突出中间的房间带 */
+body::before{
+  content:'';position:fixed;inset:-8vmax;z-index:0;pointer-events:none;
+  background:url('assets/room.png') center/cover no-repeat;
+  filter:blur(24px) brightness(.3) saturate(1.15);
+  image-rendering:pixelated;
+}
+body::after{
+  content:'';position:fixed;inset:0;z-index:0;pointer-events:none;
+  background:linear-gradient(180deg,
+    rgba(12,8,6,.6) 0%,rgba(12,8,6,.05) 30%,
+    rgba(12,8,6,0) 58%,rgba(12,8,6,.78) 100%);
+}
+
+/* 房间横带：宽度撑满，高度按 16:9 自动算，位置由 --band-top 控制 */
+#stage{
+  left:0;
+  top:var(--band-top,18vh);
+  transform:none;
+  width:100vw;height:56.25vw;
+  max-width:none;max-height:none;
+  z-index:2;
+  box-shadow:0 14px 44px rgba(0,0,0,.75),0 0 0 2px rgba(0,0,0,.45);
+}
+
+/* 标题在横带里太挤，竖屏收掉 */
+#title{display:none}
+
+/* HUD：挤到顶栏一行，字号放大到可读 */
+#hud{
+  position:fixed;left:3.5vw;right:3.5vw;
+  top:calc(env(safe-area-inset-top,0px) + 2.2vh);
+  flex-direction:row;align-items:center;gap:2.6vw;
+  z-index:40;pointer-events:none;
+}
+#hud #clockBox{
+  font-size:13px;padding:6px 10px;
+  background:rgba(58,38,32,.9);border:2px solid var(--cream);
+  box-shadow:3px 3px 0 rgba(0,0,0,.55);
+}
+#hud #stateBadge{font-size:13px;padding:6px 10px;border-width:2px;box-shadow:3px 3px 0 rgba(0,0,0,.55)}
+
+/* 底部控制条：四个大按钮平均分布，拇指可点 */
+#ctrls{
+  position:fixed;left:50%;
+  top:auto;bottom:calc(env(safe-area-inset-bottom,0px) + 3vh);
+  transform:translateX(-50%);
+  width:min(88vw,360px);
+  justify-content:space-between;gap:0;
+  z-index:45;
+}
+.cbtn{
+  width:58px;height:58px;
+  border-width:3px;font-size:23px;
+  box-shadow:4px 4px 0 rgba(0,0,0,.55);
+}
+.cbtn .tip{display:none}   /* 悬停提示在触屏无用 */
+
+/* 帮助面板：改为底部弹出的整宽面板 */
+#ctrlHint .ch-body{
+  position:fixed;top:auto !important;right:5vw !important;
+  left:5vw !important;bottom:calc(env(safe-area-inset-bottom,0px) + 3vh + 70px) !important;
+  width:auto !important;
+  font-size:13px;line-height:1.85;padding:14px 16px;
+  z-index:47;
+}
+
+/* 正在播放的曲名 */
+#nowPlaying{
+  position:fixed;left:5vw;right:auto;
+  top:auto;bottom:calc(env(safe-area-inset-bottom,0px) + 3vh + 70px);
+  font-size:12px;padding:5px 9px;
+  z-index:44;transform:none;
+}
+#nowPlaying.show{transform:none}
+
+/* 对话框：整宽贴底，压在按钮上方；#stage 已取消 transform，fixed 可脱离裁切 */
+#dlg{
+  position:fixed;
+  left:5vw !important;right:5vw !important;
+  top:auto !important;
+  bottom:calc(env(safe-area-inset-bottom,0px) + 3vh + 72px) !important;
+  width:auto !important;
+  transform:translateY(150%);
+  z-index:46;
+}
+#dlg.show{transform:translateY(0)}
+#dlg .who{font-size:11px;top:-11px;padding:1px 9px}
+#dlgText{font-size:14px;line-height:1.65}
+#dlg .next{font-size:11px}
+
+/* 收集完成横幅：保留桌面版的 scale(0) 隐藏态，否则会被本文件的 transform 覆盖而误显示 */
+#banner{
+  position:fixed;left:50%;top:34%;
+  transform:translate(-50%,-50%) scale(0);
+  width:88vw;max-width:none;
+  z-index:50;
+}
+#banner.show{transform:translate(-50%,-50%) scale(1)}
+
+/* 入场卡片：留出安全区，字号适配手机 */
+#intro .card{
+  width:86vw;max-width:none;
+  padding:28px 22px;
+  box-shadow:0 0 0 4px var(--panel),9px 9px 0 rgba(0,0,0,.7);
+}
+#intro .card h1{font-size:23px;letter-spacing:4px}
+#intro .card .sub{font-size:10px;letter-spacing:2px}
+#intro .card .desc{font-size:13px;line-height:1.95}
+#intro .go{
+  padding:13px 30px;font-size:15px;
+  margin-top:4px;
+}
