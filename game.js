@@ -233,16 +233,7 @@ function moveCatTo(leftPct, bottomPct){
   if(curState !== STATE_IDX.sit){
     catEl.className = 'sit';
     document.body.dataset.catstate = 'sit';
-    if(catVideo.src.split('/').pop() !== st.src.split('/').pop()){
-      catVideo.src = st.src; catVideo.load();
-    }
-    catCanvas.classList.add('show');
-    catImg.classList.remove('show');
-    catDrawing = true;
-    requestAnimationFrame(drawCatFrame);
-    const tryPlay = () => { const p = catVideo.play(); if(p && p.catch) p.catch(()=>{}); };
-    if(catVideo.readyState >= 2){ tryPlay(); }
-    else { catVideo.addEventListener('canplay', tryPlay, { once: true }); }
+    startVideoSprite(st);
     catVideo.pause();
   }
   catEl.style.left = leftPct + '%';
@@ -538,6 +529,7 @@ $('stage').addEventListener('pointerup', e => {
 const STATES = [
   {
     key: 'sit', name: '发呆中', icon: '◈', type: 'video', src: 'assets/sit.webm?v=28',
+    png: 'assets/sit.png',   // 同构图的静态降级图（浏览器不支持视频 alpha 时使用）
     cat: { left: 63, bottom: 1.5, h: 43, shade: 62 },
     box: { l: 45.5, t: 54, w: 36, h: 45 },
     enter: '在地毯上团成一块猫饼，尾巴仔细地把爪子盖好。',
@@ -691,6 +683,64 @@ function paintCatLight(ctx, w, h, mix){
   }
   ctx.globalCompositeOperation = 'source-over';
 }
+/* 部分浏览器（Safari / iOS 的 WebKit）解码 VP9 时不支持 alpha 通道，视频帧会带上一层
+   不透明的浅灰底（正是 sit.png 的背景色 #e6e6e5），在房间里表现为一块白框。
+   这里在首帧可用时实测四角透明度：四角全不透明即判定不支持 alpha，退回同构图静态 PNG
+   （构图与尺寸完全一致，只少了尾巴的细微摆动）。 */
+let videoAlphaOK = null;   // null = 尚未测定
+function probeVideoAlpha(){
+  if(videoAlphaOK !== null) return videoAlphaOK;
+  if(catVideo.readyState < 2 || !catVideo.videoWidth) return null;
+  try{
+    const c = document.createElement('canvas');
+    c.width = catVideo.videoWidth; c.height = catVideo.videoHeight;
+    const x = c.getContext('2d', { willReadFrequently: true });
+    x.drawImage(catVideo, 0, 0);
+    const pts = [[0, 0], [c.width - 1, 0], [0, c.height - 1], [c.width - 1, c.height - 1]];
+    videoAlphaOK = pts.some(([px, py]) => x.getImageData(px, py, 1, 1).data[3] < 64);
+  }catch(_){
+    videoAlphaOK = true;     // 读不到像素（如跨域）时按支持处理，保持原有行为
+  }
+  return videoAlphaOK;
+}
+
+/* 启动 video 立绘：先用同构图静态 PNG 顶上（既避免白框闪现，也作为降级图），
+   等首帧解码完成后探测 alpha，通过才切到 canvas 逐帧渲染。 */
+function startVideoSprite(st){
+  catDrawing = false;
+  if(catVideo.src.split('/').pop() !== st.src.split('/').pop()){
+    catVideo.src = st.src;
+    catVideo.load();
+  }
+  catCanvas.classList.remove('show');
+  if(catImg.getAttribute('src') !== st.png){
+    catImg.classList.remove('show');
+    catImg.src = st.png;
+  }
+  const showStill = () => {
+    if(document.body.dataset.catstate === st.key) catImg.classList.add('show');
+  };
+  if(catImg.complete && catImg.naturalWidth){ showStill(); }
+  else { catImg.addEventListener('load', showStill, { once: true }); }
+
+  const useCanvas = () => {
+    if(document.body.dataset.catstate !== st.key) return;   // 已切到别的动作，丢弃回调
+    const p = catVideo.play();
+    if(p && p.catch) p.catch(() => {});
+    const ok = probeVideoAlpha();
+    if(ok === null){ setTimeout(useCanvas, 120); return; }   // 帧还没解出来，稍后再测
+    if(ok === false){ catVideo.pause(); return; }            // alpha 不可用 → 停在静态图
+    catCanvas.classList.add('show');
+    catImg.classList.remove('show');
+    catDrawing = true;
+    requestAnimationFrame(drawCatFrame);
+  };
+  if(catVideo.readyState >= 2){ useCanvas(); }
+  else { catVideo.addEventListener('canplay', useCanvas, { once: true }); }
+  syncShade();
+  setTimeout(syncShade, 320);
+}
+
 /* 静态立绘夜晚用烘焙了冷暖光的版本 */
 function spriteSrc(st){
   if(st.type === 'image' && document.body.dataset.time === 'night'){
@@ -856,20 +906,7 @@ function setState(key, auto){
   if($('h-cat').matches(':hover')) catEl.classList.add('hint-show');  // 切动作不丢悬停提示
   document.body.dataset.catstate = st.key;
   if(st.type === 'video'){
-    if(catVideo.src.split('/').pop() !== st.src.split('/').pop()){
-      catVideo.src = st.src;
-      catVideo.load();
-    }
-    catCanvas.classList.add('show');
-    catImg.classList.remove('show');
-    catDrawing = true;
-    requestAnimationFrame(drawCatFrame);
-    const tryPlay = () => {
-      const p = catVideo.play();
-      if(p && p.catch) p.catch(() => {});
-    };
-    if(catVideo.readyState >= 2){ tryPlay(); }
-    else { catVideo.addEventListener('canplay', tryPlay, { once: true }); }
+    startVideoSprite(st);
   }else{
     /* 静态立绘：先保持透明并保留上一动作画面垫底，等新图加载到正确尺寸后再淡入，
        避免 src 刚切换、固有尺寸未就绪时 width:auto 回退成大宽度而“变大一闪” */
@@ -1647,22 +1684,10 @@ placeCat(STATES[0]);
 moveCatHot(STATES[0].box);
 document.body.dataset.catstate = STATES[0].key;
 catEl.className = STATES[0].key;
-// 初始状态用动态 video（经 canvas 渲染）
+// 初始状态用动态 video（经 canvas 渲染；alpha 不可用时自动退回静态 PNG）
 (function initMedia(){
   const st = STATES[0];
-  if(st.type === 'video'){
-    catVideo.src = st.src;
-    catCanvas.classList.add('show');
-    catImg.classList.remove('show');
-    catDrawing = true;
-    requestAnimationFrame(drawCatFrame);
-    const tryPlay = () => {
-      const p = catVideo.play();
-      if(p && p.catch) p.catch(() => {});
-    };
-    if(catVideo.readyState >= 2){ tryPlay(); }
-    else { catVideo.addEventListener('canplay', tryPlay, { once: true }); }
-  }
+  if(st.type === 'video'){ startVideoSprite(st); }
 })();
 
 /* ---------------- 房间背景：昼夜 × 窗户开关 共四态 ----------------
